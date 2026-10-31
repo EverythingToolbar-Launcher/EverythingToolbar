@@ -1,0 +1,18 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Library</OutputType>
+    <RootNamespace>EverythingToolbar.App</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="CommunityToolkit.Mvvm" />
+    <PackageReference Include="Config.Net" />
+    <PackageReference Include="NLog" />
+  </ItemGroup>
+  <ItemGroup>
+    <ProjectReference Include="..\EverythingToolbar.Core\EverythingToolbar.Core.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Using Include="EverythingToolbar.App.Services" />
+    <Using Include="EverythingToolbar.Core.Services" />
+  </ItemGroup>
+</Project>

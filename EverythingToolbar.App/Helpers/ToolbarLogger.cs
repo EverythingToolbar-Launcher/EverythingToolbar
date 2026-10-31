@@ -1,0 +1,102 @@
+﻿using System;
+using System.IO;
+using System.Reflection;
+using NLog;
+using NLog.Config;
+using NLog.Targets;
+
+namespace EverythingToolbar.App.Helpers
+{
+    public static class ToolbarLogger
+    {
+        private static readonly string DebugFlagFileName = Path.Combine(ConfigPaths.GetConfigDirectory(), "debug.txt");
+        private static readonly LogFactory LogFactory = new LogFactory();
+        private static ILogger? RootLogger;
+
+        public static ILogger GetLogger(string name)
+        {
+            return LogFactory.GetLogger(name);
+        }
+
+        public static ILogger GetLogger<T>()
+        {
+            return LogFactory.GetLogger(typeof(T).FullName);
+        }
+
+        private static LogLevel GetLogLevel()
+        {
+            return File.Exists(DebugFlagFileName) ? LogLevel.Debug : LogLevel.Info;
+        }
+
+        private static void LogVersionInformation(ILogger logger)
+        {
+            logger.Debug("Debug logging enabled.");
+            logger.Info(
+                $"EverythingToolbar {Assembly.GetExecutingAssembly().GetName().Version} started. OS: {Environment.OSVersion}"
+            );
+        }
+
+        private static void InitializeExceptionLoggers(ILogger logger)
+        {
+            AppDomain.CurrentDomain.FirstChanceException += (_, e) =>
+            {
+                if (IsKnownBenignException(e.Exception))
+                    return;
+
+                logger.Debug(e.Exception, "Unhandled first chance exception");
+            };
+            AppDomain.CurrentDomain.UnhandledException += (_, args) =>
+            {
+                logger.Error((Exception)args.ExceptionObject, "Unhandled exception");
+            };
+        }
+
+        private static bool IsKnownBenignException(Exception exception)
+        {
+            // Cancellation is regular control flow (e.g. a search query superseded by a newer one)
+            if (exception is OperationCanceledException)
+                return true;
+
+            // XmlSerializer probes for pre-generated *.XmlSerializers assemblies and falls back
+            // to runtime code generation when they do not exist
+            if (
+                exception is FileNotFoundException fileNotFound
+                && fileNotFound.FileName?.Contains(".XmlSerializers") == true
+            )
+                return true;
+
+            return false;
+        }
+
+        private static void ConfigureLogger()
+        {
+            var logfile = new FileTarget("logfile")
+            {
+                FileName = Path.Combine(Path.GetTempPath(), "EverythingToolbar.log"),
+                ArchiveEvery = FileArchivePeriod.Day,
+                ArchiveNumbering = ArchiveNumberingMode.Date,
+                MaxArchiveFiles = 3,
+                KeepFileOpen = true,
+                OpenFileCacheTimeout = 30,
+                ConcurrentWrites = true,
+                Layout = "${longdate}|${level:uppercase=true}|${logger}|${message}|${exception:format=tostring}",
+            };
+            var fileRule = new LoggingRule("*", GetLogLevel(), logfile);
+            var config = new LoggingConfiguration();
+            config.LoggingRules.Add(fileRule);
+            LogFactory.Configuration = config;
+        }
+
+        public static void Initialize(string name)
+        {
+            ConfigureLogger();
+
+            RootLogger = GetLogger(name);
+            LogVersionInformation(RootLogger);
+            InitializeExceptionLoggers(RootLogger);
+        }
+
+        public static void LogUiThreadException(Exception exception) =>
+            RootLogger?.Error(exception, "Unhandled exception on UI thread");
+    }
+}
